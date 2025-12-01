@@ -403,12 +403,13 @@
     </div>
 
     <script>
-        let html5QrcodeScanner;
+        let html5QrcodeScanner = null;
         let isProcessing = false;
+        let isScanning = false;
 
         console.log('=== SISTEMA DE CHECK-IN INICIADO ===');
 
-        function startScanner() {
+        async function startScanner() {
             console.log('🎬 Iniciando scanner...');
             
             const scannerContainer = document.getElementById('scanner-container');
@@ -416,31 +417,36 @@
             const stopBtn = document.getElementById('stop-btn');
             const nextBtn = document.getElementById('next-btn');
             
-            // Se já existe um scanner ativo, para ele primeiro
-            if (html5QrcodeScanner) {
-                console.log('🔄 Scanner já existe, parando antes de reiniciar...');
-                html5QrcodeScanner.stop().then(() => {
+            // Se já está escaneando, para primeiro
+            if (isScanning && html5QrcodeScanner) {
+                console.log('🔄 Parando scanner existente...');
+                try {
+                    await html5QrcodeScanner.stop();
                     console.log('✅ Scanner anterior parado');
-                    iniciarNovoScanner();
-                }).catch(err => {
-                    console.log('⚠️ Erro ao parar scanner anterior (ignorando):', err);
-                    iniciarNovoScanner();
-                });
-            } else {
-                iniciarNovoScanner();
+                    html5QrcodeScanner = null;
+                    isScanning = false;
+                } catch (err) {
+                    console.log('⚠️ Erro ao parar scanner (continuando):', err);
+                    html5QrcodeScanner = null;
+                    isScanning = false;
+                }
             }
             
-            function iniciarNovoScanner() {
-                scannerContainer.classList.remove('hidden');
-                startBtn.classList.add('hidden');
-                stopBtn.classList.remove('hidden');
-                nextBtn.classList.add('hidden');
-                
-                updateResult('loading', '🔍', 'Procurando QR Code...', 'Posicione o código na área de captura');
+            // Aguarda um pouco antes de reiniciar
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            scannerContainer.classList.remove('hidden');
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            nextBtn.classList.add('hidden');
+            isProcessing = false;
+            
+            updateResult('loading', '🔍', 'Procurando QR Code...', 'Posicione o código na área de captura');
 
+            try {
                 html5QrcodeScanner = new Html5Qrcode("qr-reader");
-
-                html5QrcodeScanner.start(
+                
+                await html5QrcodeScanner.start(
                     { facingMode: "environment" },
                     {
                         fps: 10,
@@ -448,43 +454,54 @@
                     },
                     onScanSuccess,
                     onScanError
-                ).then(() => {
-                    console.log('✅ Scanner iniciado com sucesso');
-                }).catch(err => {
-                    console.error('❌ Erro ao acessar a câmera:', err);
-                    updateResult('error', '❌', 'Erro ao acessar câmera', 'Verifique as permissões do navegador');
-                });
+                );
+                
+                isScanning = true;
+                console.log('✅ Scanner iniciado com sucesso');
+                
+            } catch (err) {
+                console.error('❌ Erro ao acessar a câmera:', err);
+                updateResult('error', '❌', 'Erro ao acessar câmera', 'Verifique as permissões do navegador');
+                isScanning = false;
             }
         }
 
-        function stopScanner() {
+        async function stopScanner() {
             console.log('🛑 Parando scanner...');
             
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.stop().then(() => {
+            if (html5QrcodeScanner && isScanning) {
+                try {
+                    await html5QrcodeScanner.stop();
                     console.log('✅ Scanner parado');
-                    document.getElementById('scanner-container').classList.add('hidden');
-                    document.getElementById('start-btn').classList.remove('hidden');
-                    document.getElementById('stop-btn').classList.add('hidden');
-                    document.getElementById('next-btn').classList.add('hidden');
-                    updateResult('normal', '🎫', 'Aguardando Scanner', 'Clique em "Iniciar Scanner" para começar');
-                    isProcessing = false;
-                }).catch(err => {
+                } catch (err) {
                     console.error('❌ Erro ao parar scanner:', err);
-                });
+                }
             }
+            
+            html5QrcodeScanner = null;
+            isScanning = false;
+            document.getElementById('scanner-container').classList.add('hidden');
+            document.getElementById('start-btn').classList.remove('hidden');
+            document.getElementById('stop-btn').classList.add('hidden');
+            document.getElementById('next-btn').classList.add('hidden');
+            updateResult('normal', '🎫', 'Aguardando Scanner', 'Clique em "Iniciar Scanner" para começar');
+            isProcessing = false;
         }
 
-        function scanNext() {
-            console.log('➡️ Preparando para próximo scan...');
+        async function scanNext() {
+            console.log('');
+            console.log('➡️ CLICOU EM ESCANEAR PRÓXIMO');
+            console.log('Estado atual - isScanning:', isScanning, '| isProcessing:', isProcessing);
             
-            document.getElementById('next-btn').classList.add('hidden');
+            const nextBtn = document.getElementById('next-btn');
+            nextBtn.classList.add('hidden');
+            
             isProcessing = false;
             
-            // Reinicia o scanner do zero
-            startScanner();
+            console.log('🔄 Reiniciando scanner para próximo QR Code...');
+            await startScanner();
             
-            console.log('✅ Scanner reiniciado para próximo QR Code');
+            console.log('✅ Pronto para escanear próximo');
         }
 
         async function onScanSuccess(decodedText) {
@@ -501,14 +518,17 @@
             updateResult('loading', '⏳', 'Verificando ingresso...', 'Aguarde enquanto consultamos o sistema');
             
             // Para o scanner
-            if (html5QrcodeScanner) {
-                html5QrcodeScanner.stop().then(() => {
+            if (html5QrcodeScanner && isScanning) {
+                try {
+                    await html5QrcodeScanner.stop();
+                    isScanning = false;
                     console.log('✅ Scanner pausado para verificação');
                     document.getElementById('scanner-container').classList.add('hidden');
                     document.getElementById('stop-btn').classList.add('hidden');
-                }).catch(err => {
+                } catch (err) {
                     console.error('❌ Erro ao pausar scanner:', err);
-                });
+                    isScanning = false;
+                }
             }
 
             try {
