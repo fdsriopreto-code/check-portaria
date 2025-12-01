@@ -416,29 +416,45 @@
             const stopBtn = document.getElementById('stop-btn');
             const nextBtn = document.getElementById('next-btn');
             
-            scannerContainer.classList.remove('hidden');
-            startBtn.classList.add('hidden');
-            stopBtn.classList.remove('hidden');
-            nextBtn.classList.add('hidden');
+            // Se já existe um scanner ativo, para ele primeiro
+            if (html5QrcodeScanner) {
+                console.log('🔄 Scanner já existe, parando antes de reiniciar...');
+                html5QrcodeScanner.stop().then(() => {
+                    console.log('✅ Scanner anterior parado');
+                    iniciarNovoScanner();
+                }).catch(err => {
+                    console.log('⚠️ Erro ao parar scanner anterior (ignorando):', err);
+                    iniciarNovoScanner();
+                });
+            } else {
+                iniciarNovoScanner();
+            }
             
-            updateResult('loading', '🔍', 'Procurando QR Code...', 'Posicione o código na área de captura');
+            function iniciarNovoScanner() {
+                scannerContainer.classList.remove('hidden');
+                startBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+                nextBtn.classList.add('hidden');
+                
+                updateResult('loading', '🔍', 'Procurando QR Code...', 'Posicione o código na área de captura');
 
-            html5QrcodeScanner = new Html5Qrcode("qr-reader");
+                html5QrcodeScanner = new Html5Qrcode("qr-reader");
 
-            html5QrcodeScanner.start(
-                { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: { width: 280, height: 280 }
-                },
-                onScanSuccess,
-                onScanError
-            ).then(() => {
-                console.log('✅ Scanner iniciado com sucesso');
-            }).catch(err => {
-                console.error('❌ Erro ao acessar a câmera:', err);
-                updateResult('error', '❌', 'Erro ao acessar câmera', 'Verifique as permissões do navegador');
-            });
+                html5QrcodeScanner.start(
+                    { facingMode: "environment" },
+                    {
+                        fps: 10,
+                        qrbox: { width: 280, height: 280 }
+                    },
+                    onScanSuccess,
+                    onScanError
+                ).then(() => {
+                    console.log('✅ Scanner iniciado com sucesso');
+                }).catch(err => {
+                    console.error('❌ Erro ao acessar a câmera:', err);
+                    updateResult('error', '❌', 'Erro ao acessar câmera', 'Verifique as permissões do navegador');
+                });
+            }
         }
 
         function stopScanner() {
@@ -465,9 +481,10 @@
             document.getElementById('next-btn').classList.add('hidden');
             isProcessing = false;
             
-            updateResult('loading', '🔍', 'Procurando QR Code...', 'Posicione o código na área de captura');
+            // Reinicia o scanner do zero
+            startScanner();
             
-            console.log('✅ Pronto para escanear próximo QR Code');
+            console.log('✅ Scanner reiniciado para próximo QR Code');
         }
 
         async function onScanSuccess(decodedText) {
